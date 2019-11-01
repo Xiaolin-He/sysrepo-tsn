@@ -23,9 +23,51 @@
 #include <unistd.h>
 #include <signal.h>
 #include <inttypes.h>
+#include <sys/inotify.h>
+#include <pthread.h>
+#include <errno.h>
 
 #include "common.h"
 
+static pthread_mutex_t tsn_mutex;
+
+void init_tsn_mutex(void)
+{
+	pthread_mutex_init(&tsn_mutex, NULL);
+}
+
+void destroy_tsn_mutex(void)
+{
+	pthread_mutex_destroy(&tsn_mutex);
+}
+
+void init_tsn_socket(void)
+{
+	pthread_mutex_lock(&tsn_mutex);
+	genl_tsn_init();
+}
+
+void close_tsn_socket(void)
+{
+	genl_tsn_close();
+	pthread_mutex_unlock(&tsn_mutex);
+}
+
+int errno2sp(int errtsn)
+{
+	int errsp = 0;
+
+	switch (errtsn) {
+	case EINVAL:
+		errsp = SR_ERR_INVAL_ARG;
+		break;	
+	case ENOMEM:
+		errsp = SR_ERR_NOMEM;
+		break;
+	default:
+		errsp = SR_ERR_INVAL_ARG;
+	}
+}
 void print_change(sr_change_oper_t oper, sr_val_t *val_old,
 		sr_val_t *val_new)
 {

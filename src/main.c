@@ -32,89 +32,42 @@
 #include "qbu.h"
 
 
-static int exit_application;
-
-static int qbv_subtree_change_cb(sr_session_ctx_t *session, const char *path,
-		sr_notif_event_t event, void *private_ctx)
-{
-	int rc = SR_ERR_OK;
-	sr_change_iter_t *it = NULL;
-	sr_change_oper_t oper;
-	sr_val_t *old_value = NULL;
-	sr_val_t *new_value = NULL;
-	char xpath[XPATH_MAX_LEN] = {0,};
-
-	printf("\n -------------------------------%s is called\n", __func__);
-/*
-	printf("\n\n ========== CURRENT QBV CONFIG ==================\n\n");
-	snprintf(xpath, XPATH_MAX_LEN, "%s/ieee802-dot1q-sched:*//*", IF_XPATH);
-	print_config_iter(session, xpath);
-*/
-	printf("\n\n ========== START OF QBV CHANGES ================\n\n");
-	snprintf(xpath, XPATH_MAX_LEN, "%s/ieee802-dot1q-sched:*", IF_XPATH);
-	rc = sr_get_changes_iter(session, xpath, &it);
-	if (rc != SR_ERR_OK) {
-		printf("Get changes iter failed for xpath %s", xpath);
-		goto cleanup;
-	}
-
-	while (SR_ERR_OK == (rc = sr_get_change_next(session, it,
-					&oper, &old_value, &new_value))) {
-		print_change(oper, old_value, new_value);
-		sr_free_val(old_value);
-		sr_free_val(new_value);
-	}
-	printf("\n\n ========== END OF QBV CHANGES ==================\n\n");
-
-cleanup:
-	sr_free_change_iter(it);
-	return SR_ERR_OK;
-}
-
-static int qbu_subtree_change_cb(sr_session_ctx_t *session, const char *path,
-		sr_notif_event_t event, void *private_ctx)
-{
-	int rc = SR_ERR_OK;
-	sr_change_iter_t *it = NULL;
-	sr_change_oper_t oper;
-	sr_val_t *old_value = NULL;
-	sr_val_t *new_value = NULL;
-	char xpath[XPATH_MAX_LEN] = {0,};
-
-	printf("\n -------------------------------%s is called\n", __func__);
-/*
-	printf("\n\n ========== CURRENT QBU CONFIG ===================\n\n");
-	snprintf(xpath, XPATH_MAX_LEN, "%s/ieee802-dot1q-preemption:*//*",
-		 IF_XPATH);
-	print_config_iter(session, xpath);
-*/
-	printf("\n\n ========== START OF QBU CHANGES =================\n\n");
-	snprintf(xpath, XPATH_MAX_LEN, "%s/ieee802-dot1q-preemption:*",
-		 IF_XPATH);
-	rc = sr_get_changes_iter(session, xpath, &it);
-	if (rc != SR_ERR_OK) {
-		printf("Get changes iter failed for xpath %s", xpath);
-		goto cleanup;
-	}
-
-	while (SR_ERR_OK == (rc = sr_get_change_next(session, it,
-					&oper, &old_value, &new_value))) {
-		print_change(oper, old_value, new_value);
-		sr_free_val(old_value);
-		sr_free_val(new_value);
-	}
-	printf("\n\n ========== END OF QBU CHANGES ===================\n\n");
-
-cleanup:
-	sr_free_change_iter(it);
-	return SR_ERR_OK;
-}
+static uint8_t exit_application;
 
 static int module_change_cb(sr_session_ctx_t *session, const char *module_name,
 		sr_notif_event_t event, void *private_ctx)
 {
-	printf("\n---------------------------------%s is called\n", __func__);
+	int rc = SR_ERR_OK;
+	sr_change_iter_t *it = NULL;
+	sr_change_oper_t oper;
+	sr_val_t *old_value = NULL;
+	sr_val_t *new_value = NULL;
+	char change_path[XPATH_MAX_LEN] = {0,};
+	char xpath[XPATH_MAX_LEN] = {0,};
+	printf("\n----%s is called\n", __func__);
 
+	goto cleanup;
+	printf("\n\n ========== CHANGES: =============================================\n\n");
+
+
+	snprintf(change_path, XPATH_MAX_LEN, "/ietf-interfaces:*");
+
+	rc = sr_get_changes_iter(session, change_path , &it);
+	if (SR_ERR_OK != rc) {
+		printf("Get changes iter failed for xpath %s", change_path);
+		goto cleanup;
+	}
+
+	while (SR_ERR_OK == (rc = sr_get_change_next(session, it,
+		&oper, &old_value, &new_value))) {
+		print_change(oper, old_value, new_value);
+		sr_free_val(old_value);
+		sr_free_val(new_value);
+	}
+	printf("\n\n ========== END OF CHANGES =======================================\n\n");
+	
+	sr_free_change_iter(it);
+cleanup:
 	return SR_ERR_OK;
 }
 
@@ -135,11 +88,9 @@ int main(int argc, char **argv)
 	sr_subscr_options_t opts;
 
 	exit_application = 0;
+	init_tsn_mutex();
 	/* connect to sysrepo */
-	printf("\nThis app will get tsn cap  of '%s'\n", port);
-	genl_tsn_init();
-	tsn_capability_get(port, &cap);
-	genl_tsn_close();
+	printf("\nThis app will watch for changes in tsn related modules\n");
 	rc = sr_connect("netconf-tsn", SR_CONN_DEFAULT, &connection);
 	if (rc != SR_ERR_OK) {
 		fprintf(stderr, "Error by sr_connect: %s\n", sr_strerror(rc));
@@ -195,6 +146,7 @@ int main(int argc, char **argv)
 	printf("\nApplication exit requested, exiting.\n");
 
 cleanup:
+	destroy_tsn_mutex();
 	if (subscription)
 		sr_unsubscribe(session, subscription);
 	if (session)

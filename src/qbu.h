@@ -22,5 +22,9 @@
 #define __QBU_H_
 
 #define QBU_XPATH "/ieee802-dot1q-preemption:frame-preemption-parameters"
+#define QBU_MODULE_NAME "ieee802-dot1q-preemption"
+
+int qbu_subtree_change_cb(sr_session_ctx_t *session, const char *path,
+		sr_notif_event_t event, void *private_ctx);
 
 #endif

@@ -22,13 +22,23 @@
 #define __COMMON_H_
 
 #define XPATH_MAX_LEN 200
+#define IF_NAME_MAX_LEN 20
+#define NODE_NAME_MAX_LEN 80
 
-#include <tsn/genl_tsn.h> /* must ensure no stdbool.h was included before */
-#include <linux/tsn.h>
 #include <sysrepo.h>
 #include <sysrepo/values.h>
+#include <sysrepo/plugins.h>
+#include <sysrepo/trees.h>
+#include "sysrepo/xpath.h"
+#include <tsn/genl_tsn.h> /* must ensure no stdbool.h was included before */
+#include <linux/tsn.h>
 
 void print_change(sr_change_oper_t oper, sr_val_t *val_old, sr_val_t *val_new);
 void print_config_iter(sr_session_ctx_t *session, const char *path);
+void init_tsn_mutex(void);
+void destroy_tsn_mutex(void);
+void init_tsn_socket(void);
+void close_tsn_socket(void);
+int errno2sp(int errtsn);
 
 #endif
