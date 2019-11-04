@@ -111,6 +111,11 @@ int main(int argc, char **argv)
 	rc = sr_module_change_subscribe(session, "ietf-interfaces",
 					module_change_cb, NULL, 0, opts,
 					&subscription);
+	if (rc != SR_ERR_OK) {
+		fprintf(stderr, "Error by sr_module_change_subscribe: %s\n",
+			sr_strerror(rc));
+		goto cleanup;
+	}
 
 	opts = SR_SUBSCR_APPLY_ONLY | SR_SUBSCR_DEFAULT | SR_SUBSCR_CTX_REUSE;
 	/* subscribe to QBV subtree */
@@ -118,24 +123,33 @@ int main(int argc, char **argv)
 	strncat(path, QBV_GATE_PARA_XPATH, XPATH_MAX_LEN);
 	rc = sr_subtree_change_subscribe(session, path, qbv_subtree_change_cb,
 					 NULL, 0, opts, &subscription);
-	/* subscribe to QBV subtree */
-	snprintf(path, XPATH_MAX_LEN, IF_XPATH);
-	strncat(path, QBV_MAX_SDU_XPATH, XPATH_MAX_LEN);
-	rc = sr_subtree_change_subscribe(session, path, qbv_subtree_change_cb,
-					 NULL, 0, opts, &subscription);
-	/* subscribe to QBU subtree */
-	snprintf(path, XPATH_MAX_LEN, IF_XPATH);
-	strncat(path, QBU_XPATH, XPATH_MAX_LEN);
-	rc = sr_subtree_change_subscribe(session, path, qbu_subtree_change_cb,
-					 NULL, 0, opts, &subscription);
-
 	if (rc != SR_ERR_OK) {
 		fprintf(stderr, "Error by sr_module_change_subscribe: %s\n",
 			sr_strerror(rc));
 		goto cleanup;
 	}
-
-	printf("\n\n ======== STARTUP CONFIG APPLIED AS RUNNING =====\n\n");
+	/* subscribe to QBV subtree */
+	snprintf(path, XPATH_MAX_LEN, IF_XPATH);
+	strncat(path, QBV_MAX_SDU_XPATH, XPATH_MAX_LEN);
+	opts = SR_SUBSCR_APPLY_ONLY | SR_SUBSCR_DEFAULT | SR_SUBSCR_CTX_REUSE;
+	rc = sr_subtree_change_subscribe(session, path, qbv_subtree_change_cb,
+					 NULL, 0, opts, &subscription);
+	if (rc != SR_ERR_OK) {
+		fprintf(stderr, "Error by sr_module_change_subscribe: %s\n",
+			sr_strerror(rc));
+		goto cleanup;
+	}
+	/* subscribe to QBU subtree */
+	snprintf(path, XPATH_MAX_LEN, IF_XPATH);
+	strncat(path, QBU_XPATH, XPATH_MAX_LEN);
+	opts = SR_SUBSCR_APPLY_ONLY | SR_SUBSCR_DEFAULT | SR_SUBSCR_CTX_REUSE;
+	rc = sr_subtree_change_subscribe(session, path, qbu_subtree_change_cb,
+					 NULL, 0, opts, &subscription);
+	if (rc != SR_ERR_OK) {
+		fprintf(stderr, "Error by sr_module_change_subscribe: %s\n",
+			sr_strerror(rc));
+		goto cleanup;
+	}
 
 	/* loop until ctrl-c is pressed / SIGINT is received */
 	signal(SIGINT, sigint_handler);
