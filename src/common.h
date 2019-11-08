@@ -26,12 +26,23 @@
 #define NODE_NAME_MAX_LEN 80
 
 #include <sysrepo.h>
+#include <stdbool.h>
 #include <sysrepo/values.h>
 #include <sysrepo/plugins.h>
 #include <sysrepo/trees.h>
 #include "sysrepo/xpath.h"
 #include <tsn/genl_tsn.h> /* must ensure no stdbool.h was included before */
 #include <linux/tsn.h>
+
+struct cycle_time_s {
+	uint64_t numerator;
+	uint64_t denominator;
+};
+
+struct base_time_s {
+	uint64_t seconds;
+	uint64_t nanoseconds;
+};
 
 void print_change(sr_change_oper_t oper, sr_val_t *val_old, sr_val_t *val_new);
 void print_config_iter(sr_session_ctx_t *session, const char *path);
@@ -40,5 +51,7 @@ void destroy_tsn_mutex(void);
 void init_tsn_socket(void);
 void close_tsn_socket(void);
 int errno2sp(int errtsn);
+uint64_t cal_base_time(struct base_time_s *basetime);
+uint64_t cal_cycle_time(struct cycle_time_s *cycletime);
 
 #endif

@@ -53,11 +53,23 @@ void close_tsn_socket(void)
 	pthread_mutex_unlock(&tsn_mutex);
 }
 
+inline uint64_t cal_base_time(struct base_time_s *basetime)
+{
+	return ((basetime->seconds * 1000000000) + basetime->nanoseconds);
+}
+
+inline uint64_t cal_cycle_time(struct cycle_time_s *cycletime)
+{
+	return ((cycletime->numerator * 1000000000) / cycletime->denominator);
+}
+
 int errno2sp(int errtsn)
 {
 	int errsp = 0;
 
 	switch (errtsn) {
+	case SR_ERR_OK:
+		break;	
 	case EINVAL:
 		errsp = SR_ERR_INVAL_ARG;
 		break;	
@@ -67,6 +79,8 @@ int errno2sp(int errtsn)
 	default:
 		errsp = SR_ERR_INVAL_ARG;
 	}
+
+	return errsp;
 }
 void print_change(sr_change_oper_t oper, sr_val_t *val_old,
 		sr_val_t *val_new)

@@ -23,6 +23,7 @@
 
 #define QBV_GATE_PARA_XPATH "/ieee802-dot1q-sched:gate-parameters"
 #define QBV_MAX_SDU_XPATH "/ieee802-dot1q-sched:max-sdu-table"
+#define QBV_MODULE_NAME "ieee802-dot1q-sched"
 
 int qbv_subtree_change_cb(sr_session_ctx_t *session, const char *path,
 		sr_notif_event_t event, void *private_ctx);
