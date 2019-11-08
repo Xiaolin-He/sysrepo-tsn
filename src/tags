@@ -4,25 +4,52 @@
 !_TAG_PROGRAM_NAME	Exuberant Ctags	//
 !_TAG_PROGRAM_URL	http://ctags.sourceforge.net	/official site/
 !_TAG_PROGRAM_VERSION	5.9~svn20110310	//
+CB_STREAMID_MODULE_NAME	cb_streamid.h	25;"	d
+CB_STREAMID_XPATH	cb_streamid.h	24;"	d
+IF_NAME_MAX_LEN	common.h	25;"	d
 IF_XPATH	main.h	24;"	d
+NODE_NAME_MAX_LEN	common.h	26;"	d
 QBU_MODULE_NAME	qbu.h	25;"	d
 QBU_XPATH	qbu.h	24;"	d
 QBV_GATE_PARA_XPATH	qbv.h	24;"	d
 QBV_MAX_SDU_XPATH	qbv.h	25;"	d
+QBV_MODULE_NAME	qbv.h	26;"	d
 QCI_SFI_XPATH	qci_sfi.h	8;"	d
 XPATH_MAX_LEN	common.h	24;"	d
+__CB_STREAMID_H_	cb_streamid.h	22;"	d
 __COMMON_H_	common.h	22;"	d
 __MAIN_H_	main.h	22;"	d
 __QBU_H_	qbu.h	22;"	d
 __QBV_H_	qbv.h	22;"	d
 __QCI_SFI_H_	qci_sfi.h	6;"	d
+base_time_s	common.h	/^struct base_time_s {$/;"	s
+cal_base_time	common.c	/^inline uint64_t cal_base_time(struct base_time_s *basetime)$/;"	f
+cal_cycle_time	common.c	/^inline uint64_t cal_cycle_time(struct cycle_time_s *cycletime)$/;"	f
+close_tsn_socket	common.c	/^void close_tsn_socket(void)$/;"	f
+config_cb_streamid	cb_streamid.c	/^int config_cb_streamid(sr_session_ctx_t *session, const char *path)$/;"	f
+config_qbu	qbu.c	/^int config_qbu(sr_session_ctx_t *session, const char *path)$/;"	f
+config_qbv	qbv.c	/^int config_qbv(char * ifname, struct tsn_qbv_conf *qbvconf_ptr,$/;"	f
+cycle_time_s	common.h	/^struct cycle_time_s {$/;"	s
+denominator	common.h	/^	uint64_t denominator;$/;"	m	struct:cycle_time_s
+destroy_tsn_mutex	common.c	/^void destroy_tsn_mutex(void)$/;"	f
+errno2sp	common.c	/^int errno2sp(int errtsn)$/;"	f
 exit_application	main.c	/^static uint8_t exit_application;$/;"	v	file:
-get_qbu_cfg_data	qbu.c	/^int get_qbu_cfg_data(char *path)$/;"	f
+free_qbv_memory	qbv.c	/^void free_qbv_memory(struct tsn_qbv_conf *qbvconf_ptr)$/;"	f
+init_qbv_memory	qbv.c	/^void init_qbv_memory(struct tsn_qbv_conf *qbvconf_ptr)$/;"	f
+init_streamid_data	cb_streamid.c	/^void init_streamid_data(struct tsn_cb_streamid *streamid_ptr)$/;"	f
+init_tsn_mutex	common.c	/^void init_tsn_mutex(void)$/;"	f
+init_tsn_socket	common.c	/^void init_tsn_socket(void)$/;"	f
 main	main.c	/^int main(int argc, char **argv)$/;"	f
+malloc_qbv_memory	qbv.c	/^struct tsn_qbv_conf *malloc_qbv_memory(void)$/;"	f
 module_change_cb	main.c	/^static int module_change_cb(sr_session_ctx_t *session, const char *module_name,$/;"	f	file:
-parse_qbu	qbu.c	/^void parse_qbu(sr_session_ctx_t *session, const char *path)$/;"	f
+nanoseconds	common.h	/^	uint64_t nanoseconds;$/;"	m	struct:base_time_s
+numerator	common.h	/^	uint64_t numerator;$/;"	m	struct:cycle_time_s
+parse_qbv	qbv.c	/^int parse_qbv(sr_session_ctx_t *session, const char *path)$/;"	f
 print_change	common.c	/^void print_change(sr_change_oper_t oper, sr_val_t *val_old,$/;"	f
 print_config_iter	common.c	/^void print_config_iter(sr_session_ctx_t *session, const char *path)$/;"	f
 qbu_subtree_change_cb	qbu.c	/^int qbu_subtree_change_cb(sr_session_ctx_t *session, const char *path,$/;"	f
+qbv_subtree_change_cb	cb_streamid.c	/^int qbv_subtree_change_cb(sr_session_ctx_t *session, const char *path,$/;"	f
 qbv_subtree_change_cb	qbv.c	/^int qbv_subtree_change_cb(sr_session_ctx_t *session, const char *path,$/;"	f
+seconds	common.h	/^	uint64_t seconds;$/;"	m	struct:base_time_s
 sigint_handler	main.c	/^static void sigint_handler(int signum)$/;"	f	file:
+tsn_mutex	common.c	/^static pthread_mutex_t tsn_mutex;$/;"	v	file:

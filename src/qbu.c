@@ -29,41 +29,36 @@
 #include "main.h"
 #include "qbu.h"
 
-int get_qbu_cfg_data(char *path)
-{
-}
-
-int parse_qbu(sr_session_ctx_t *session, const char *path)
+int config_qbu(sr_session_ctx_t *session, const char *path)
 {
 	int rc = SR_ERR_OK;
 	sr_val_t *values = NULL;
-	sr_val_t *value = NULL;
 	size_t count = 0;
 	sr_xpath_ctx_t xp_ctx = {0};
 	char * ifname = NULL;
 	char * tc_str = NULL;
-	char tc_str_bak[8] = {0,};
 	uint32_t tc_num = 0;
 	uint32_t pt_num = 0;
 	char * nodename = NULL;
-	char temp[NODE_NAME_MAX_LEN] = {0,};
 	char ifname_bak[IF_NAME_MAX_LEN] = {0,};
 
 	printf("\n ========== %s is called ==========\n", __func__);
 
 	if (!path || !session)
-		return;
+		return SR_ERR_INVAL_ARG;
 
 	rc = sr_get_items(session, path, &values, &count);
 	if (rc != SR_ERR_OK) {
 		printf("Error by sr_get_items: %s", sr_strerror(rc));
 		return rc;
 	}
-	printf("\n get %d items\n", count);
+	printf("\n get %ld items\n", count);
 	init_tsn_socket();
 	for (size_t i = 0; i < count; i++) {
 		ifname = sr_xpath_key_value(values[i].xpath, "interface",
 					    "name", &xp_ctx);
+		if (*ifname_bak != '\0')
+			snprintf(ifname_bak, IF_NAME_MAX_LEN, ifname);
 		if (strcmp(ifname, ifname_bak)) {
 			if (*ifname_bak != '\0') {
 				printf("\nstart to config qbu of '%s'\n",
@@ -81,15 +76,14 @@ int parse_qbu(sr_session_ctx_t *session, const char *path)
 		}
 		sr_xpath_recover(&xp_ctx);
 		tc_str = sr_xpath_key_value(values[i].xpath,
-					"frame-preemption-status-table",
-					"traffic-class", &xp_ctx);
+					    "frame-preemption-status-table",
+					    "traffic-class", &xp_ctx);
 		if (!tc_str)
 			continue;
 
 		sr_xpath_recover(&xp_ctx);
 
 		nodename = strrchr(values[i].xpath, '/');
-		snprintf(temp, NODE_NAME_MAX_LEN, nodename);
 		if (strcmp(nodename, "/traffic-class") == 0) {
 			tc_num = values[i].data.uint8_val;
 			continue;
@@ -122,9 +116,11 @@ int qbu_subtree_change_cb(sr_session_ctx_t *session, const char *path,
 	int rc = SR_ERR_OK;
 	char xpath[XPATH_MAX_LEN] = {0,};
 
+	if (event != SR_EV_VERIFY)
+		return rc;
 	printf("\n ========== %s is called ==========\n", __func__);
 	snprintf(xpath, XPATH_MAX_LEN, "%s/%s:*//*", IF_XPATH, QBU_MODULE_NAME);
-	rc = parse_qbu(session, xpath);
+	rc = config_qbu(session, xpath);
 
 	return rc;
 }
