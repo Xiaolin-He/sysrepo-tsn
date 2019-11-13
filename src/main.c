@@ -44,6 +44,7 @@ static int module_change_cb(sr_session_ctx_t *session, const char *module_name,
 	sr_val_t *new_value = NULL;
 	char change_path[XPATH_MAX_LEN] = {0,};
 	printf("\n----%s is called\n", __func__);
+	print_ev_type(event);
 
 	goto cleanup;
 	printf("\n\n ========== CHANGES: =============================================\n\n");
@@ -112,7 +113,7 @@ int main(int argc, char **argv)
 	}
 
 	/* subscribe to ietf-interfaces module */
-	opts = SR_SUBSCR_APPLY_ONLY | SR_SUBSCR_DEFAULT;
+	opts = SR_SUBSCR_APPLY_ONLY | SR_SUBSCR_DEFAULT | SR_SUBSCR_CTX_REUSE;
 	rc = sr_module_change_subscribe(session, "ietf-interfaces",
 					module_change_cb, NULL, 0, opts,
 					&subscription);
@@ -122,7 +123,7 @@ int main(int argc, char **argv)
 		goto cleanup;
 	}
 
-	opts = SR_SUBSCR_DEFAULT | SR_SUBSCR_CTX_REUSE;
+	opts = SR_SUBSCR_DEFAULT | SR_SUBSCR_CTX_REUSE | SR_SUBSCR_EV_ENABLED;
 	/* subscribe to QBV subtree */
 	snprintf(path, XPATH_MAX_LEN, IF_XPATH);
 	strncat(path, QBV_GATE_PARA_XPATH, XPATH_MAX_LEN);
@@ -136,7 +137,7 @@ int main(int argc, char **argv)
 	/* subscribe to QBV subtree */
 	snprintf(path, XPATH_MAX_LEN, IF_XPATH);
 	strncat(path, QBV_MAX_SDU_XPATH, XPATH_MAX_LEN);
-	opts = SR_SUBSCR_DEFAULT | SR_SUBSCR_CTX_REUSE;
+	opts = SR_SUBSCR_DEFAULT | SR_SUBSCR_CTX_REUSE | SR_SUBSCR_EV_ENABLED;
 	rc = sr_subtree_change_subscribe(session, path, qbv_subtree_change_cb,
 					 NULL, 0, opts, &subscription);
 	if (rc != SR_ERR_OK) {
@@ -145,10 +146,9 @@ int main(int argc, char **argv)
 		goto cleanup;
 	}
 	/* subscribe to QBU subtree */
-	/*
 	snprintf(path, XPATH_MAX_LEN, IF_XPATH);
 	strncat(path, QBU_XPATH, XPATH_MAX_LEN);
-	opts = SR_SUBSCR_DEFAULT | SR_SUBSCR_CTX_REUSE;
+	opts = SR_SUBSCR_DEFAULT | SR_SUBSCR_CTX_REUSE | SR_SUBSCR_EV_ENABLED;
 	rc = sr_subtree_change_subscribe(session, path, qbu_subtree_change_cb,
 					 NULL, 0, opts, &subscription);
 	if (rc != SR_ERR_OK) {
@@ -156,7 +156,6 @@ int main(int argc, char **argv)
 			sr_strerror(rc));
 		goto cleanup;
 	}
-	*/
 
 	/* loop until ctrl-c is pressed / SIGINT is received */
 	signal(SIGINT, sigint_handler);

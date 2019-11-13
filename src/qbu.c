@@ -34,7 +34,6 @@ void parse_qbu(sr_val_t *val, uint32_t *tc, uint32_t *pt,
 {
 	char * tc_str = NULL;
 	sr_xpath_ctx_t xp_ctx = {0};
-	//char nodename[NODE_NAME_MAX_LEN] = {0,};
 	char *nodename = NULL;
 
 	printf("\n ========== %s is called ==========\n", __func__);
@@ -113,6 +112,7 @@ int config_qbu_per_port(sr_session_ctx_t *session, const char *path, bool abort,
 	rc = tsn_qbu_set(ifname, pt_num);
 	if (rc < 0) {
 		printf("set qbu error, %s!", strerror(-rc));
+		rc = errno2sp(-rc);
 		goto cleanup;
 	}
 
@@ -120,10 +120,10 @@ cleanup:
 	close_tsn_socket();
 	sr_free_values(values, count);
 
-	return errno2sp(-rc);
+	return rc;
 }
 
-int qbu_config_tsn(sr_session_ctx_t *session, const char *path, bool abort)
+int qbu_config(sr_session_ctx_t *session, const char *path, bool abort)
 {
 	int rc = SR_ERR_OK;
 	sr_xpath_ctx_t xp_ctx = {0};
@@ -136,10 +136,10 @@ int qbu_config_tsn(sr_session_ctx_t *session, const char *path, bool abort)
 	char ifname_bak[IF_NAME_MAX_LEN] = {0,};
 	char xpath[XPATH_MAX_LEN] = {0,};
 
-	printf("\n ========== %s is called ==========\n", __func__);
+	printf("\n ========== %s is called ==========", __func__);
 	rc = sr_get_changes_iter(session, path, &it);
 	if (rc != SR_ERR_OK) {
-		printf("Error by sr_get_items: %s", sr_strerror(rc));
+		printf("\nError by sr_get_items: %s", sr_strerror(rc));
 		goto cleanup;
 	}
 
@@ -149,9 +149,9 @@ int qbu_config_tsn(sr_session_ctx_t *session, const char *path, bool abort)
 		ifname = sr_xpath_key_value(value->xpath, "interface",
 					    "name", &xp_ctx);
 		//sr_print_val(value);
-		if (!ifname) {
+		if (!ifname)
 			continue;
-		}
+
 		if (strcmp(ifname, ifname_bak)) {
 			snprintf(ifname_bak, IF_NAME_MAX_LEN, ifname);
 			snprintf(xpath, XPATH_MAX_LEN,
@@ -159,7 +159,7 @@ int qbu_config_tsn(sr_session_ctx_t *session, const char *path, bool abort)
 				 QBU_MODULE_NAME);
 			rc = config_qbu_per_port(session, xpath, abort, ifname);
 			if (rc != SR_ERR_OK)
-				goto cleanup;
+				break;
 		}
 	}
 	if (rc == SR_ERR_NOT_FOUND)
@@ -175,7 +175,7 @@ int qbu_subtree_change_cb(sr_session_ctx_t *session, const char *path,
 	char xpath[XPATH_MAX_LEN] = {0,};
 
 	sr_session_refresh(session);
-	printf("\n ==========ssssssssss START OF %s ==========\n", __func__);
+	printf("\n ==========ssssssssss START OF %s ==========", __func__);
 	print_ev_type(event);
 	snprintf(xpath, XPATH_MAX_LEN, "%s/%s:*//*", IF_XPATH,
 		 QBU_MODULE_NAME);
@@ -183,18 +183,19 @@ int qbu_subtree_change_cb(sr_session_ctx_t *session, const char *path,
 	case SR_EV_VERIFY:
 	case SR_EV_ENABLED:
 		//print_subtree_changes(session, xpath);
-		rc = qbu_config_tsn(session, xpath, false);
+		rc = qbu_config(session, xpath, false);
 		break;
 	case SR_EV_APPLY:
 		break;
 	case SR_EV_ABORT:
 		//print_subtree_changes(session, xpath);
-		rc = qbu_config_tsn(session, xpath, true);
+		rc = qbu_config(session, xpath, true);
 		break;
 	default:
 		break;
 	}
-	printf("\n ==========eeeeeeeeeee END OF %s ==========\n", __func__);
+	printf("\n ==========eeeeeeeeeee END OF %s ===========================\n",
+		__func__);
 
 	return rc;
 }
