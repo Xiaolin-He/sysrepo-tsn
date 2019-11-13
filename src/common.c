@@ -78,6 +78,7 @@ int errno2sp(int errtsn)
 		break;
 	default:
 		errsp = SR_ERR_INVAL_ARG;
+		break;
 	}
 
 	return errsp;
@@ -115,6 +116,30 @@ void print_change(sr_change_oper_t oper, sr_val_t *val_old,
 	}
 }
 
+void print_subtree_changes(sr_session_ctx_t *session, const char *xpath)
+{
+	int rc = SR_ERR_OK;
+	sr_change_iter_t *it = NULL;
+	sr_change_oper_t oper;
+	sr_val_t *old_value = NULL;
+	sr_val_t *new_value = NULL;
+
+	rc = sr_get_changes_iter(session, xpath, &it);
+	if (rc != SR_ERR_OK) {
+		printf("Get changes iter failed for xpath %s", xpath);
+		return;
+	}
+
+	printf("\n ========== START OF CHANGES ==================\n");
+	while (SR_ERR_OK == (rc = sr_get_change_next(session, it,
+					&oper, &old_value, &new_value))) {
+		print_change(oper, old_value, new_value);
+		sr_free_val(old_value);
+		sr_free_val(new_value);
+	}
+	printf("\n ========== END OF CHANGES ==================\n");
+}
+
 void print_config_iter(sr_session_ctx_t *session, const char *path)
 {
 	sr_val_t *values = NULL;
@@ -135,3 +160,23 @@ void print_config_iter(sr_session_ctx_t *session, const char *path)
 	sr_free_values(values, count);
 }
 
+void print_ev_type(sr_notif_event_t event)
+{
+	switch (event){
+	case SR_EV_VERIFY:
+		printf("\n--- verify mode ---\n");
+		break;
+	case SR_EV_ENABLED:
+		printf("\n--- enable mode ---\n");
+		break;
+	case SR_EV_APPLY:
+		printf("\n--- apply mode ---\n");
+		break;
+	case SR_EV_ABORT:
+		printf("\n--- abort mode ---\n");
+		break;
+	default:
+		printf("\n--- unkown mode ---\n");
+		break;
+	}
+}

@@ -53,5 +53,7 @@ void close_tsn_socket(void);
 int errno2sp(int errtsn);
 uint64_t cal_base_time(struct base_time_s *basetime);
 uint64_t cal_cycle_time(struct cycle_time_s *cycletime);
+void print_ev_type(sr_notif_event_t event);
+void print_subtree_changes(sr_session_ctx_t *session, const char *path);
 
 #endif

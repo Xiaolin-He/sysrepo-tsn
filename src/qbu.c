@@ -29,98 +29,172 @@
 #include "main.h"
 #include "qbu.h"
 
-int config_qbu(sr_session_ctx_t *session, const char *path)
+void parse_qbu(sr_val_t *val, uint32_t *tc, uint32_t *pt,
+		sr_change_oper_t *oper)
 {
-	int rc = SR_ERR_OK;
-	sr_val_t *values = NULL;
-	size_t count = 0;
-	sr_xpath_ctx_t xp_ctx = {0};
-	char * ifname = NULL;
 	char * tc_str = NULL;
-	uint32_t tc_num = 0;
-	uint32_t pt_num = 0;
-	char * nodename = NULL;
-	char ifname_bak[IF_NAME_MAX_LEN] = {0,};
+	sr_xpath_ctx_t xp_ctx = {0};
+	//char nodename[NODE_NAME_MAX_LEN] = {0,};
+	char *nodename = NULL;
 
 	printf("\n ========== %s is called ==========\n", __func__);
 
-	if (!path || !session)
-		return SR_ERR_INVAL_ARG;
+	if (val->type == SR_LIST_T || val->type == SR_CONTAINER_PRESENCE_T)
+		return;
 
+	tc_str = sr_xpath_key_value(val->xpath,
+				    "frame-preemption-status-table",
+				    "traffic-class", &xp_ctx);
+	if (!tc_str)
+		return;
+
+	sr_xpath_recover(&xp_ctx);
+	nodename = sr_xpath_node_name(val->xpath);
+	if (strcmp(nodename, "traffic-class") == 0) {
+		*tc = val->data.uint8_val;
+	} else if (strcmp(nodename, "frame-preemption-status") == 0) {
+		if (oper && *oper == SR_OP_DELETED)
+			*pt &= ~(1<<*tc);
+		else if (strcmp(val->data.string_val, "preemptable") == 0)
+			*pt ^=  (1<<*tc);
+	}
+}
+
+int config_qbu_per_port(sr_session_ctx_t *session, const char *path, bool abort,
+		char *ifname)
+{
+	int rc = SR_ERR_OK;
+	sr_change_iter_t *it = NULL;
+	sr_change_oper_t oper;
+	sr_val_t *old_value = NULL;
+	sr_val_t *new_value = NULL;
+	sr_val_t *values = NULL;
+	sr_val_t *value = NULL;
+	size_t count = 0, i = 0;
+	uint32_t tc_num = 0;
+	uint32_t pt_num = 0;
+	//char xpath[XPATH_MAX_LEN] = {0,};
+
+	printf("\n ========== %s is called ==========\n", __func__);
 	rc = sr_get_items(session, path, &values, &count);
 	if (rc != SR_ERR_OK) {
 		printf("Error by sr_get_items: %s", sr_strerror(rc));
+		if (rc == SR_ERR_NOT_FOUND)
+			rc = SR_ERR_OK;
 		return rc;
 	}
-	printf("\n get %ld items\n", count);
+
 	init_tsn_socket();
-	for (size_t i = 0; i < count; i++) {
-		ifname = sr_xpath_key_value(values[i].xpath, "interface",
-					    "name", &xp_ctx);
-		if (*ifname_bak != '\0')
-			snprintf(ifname_bak, IF_NAME_MAX_LEN, ifname);
-		if (strcmp(ifname, ifname_bak)) {
-			if (*ifname_bak != '\0') {
-				printf("\nstart to config qbu of '%s'\n",
-				       ifname_bak);
-				printf("pt value is %d", pt_num);
-				rc = tsn_qbu_set(ifname_bak, pt_num);
-				if (rc < 0) {
-					printf("set qbu error, %s!",
-						strerror(-rc));
-					goto cleanup;
-				}
-				pt_num = 0;
-			}
-			snprintf(ifname_bak, IF_NAME_MAX_LEN, ifname);
+	for (i = 0; i < count; i++)
+		parse_qbu(&values[i], &tc_num, &pt_num, &oper);
+
+	/* if it is called by abort event, we should use new value */
+	if (abort) {
+		rc = sr_get_changes_iter(session, path, &it);
+		if (rc != SR_ERR_OK) {
+			printf("Get changes iter failed for xpath %s", path);
+			return rc;
 		}
-		sr_xpath_recover(&xp_ctx);
-		tc_str = sr_xpath_key_value(values[i].xpath,
-					    "frame-preemption-status-table",
-					    "traffic-class", &xp_ctx);
-		if (!tc_str)
-			continue;
+		while (SR_ERR_OK == (rc = sr_get_change_next(session, it,
+						&oper, &old_value,
+						&new_value))) {
+			if (oper == SR_OP_CREATED && new_value)
+				value = new_value;
+			else
+				value = old_value;
 
-		sr_xpath_recover(&xp_ctx);
-
-		nodename = strrchr(values[i].xpath, '/');
-		if (strcmp(nodename, "/traffic-class") == 0) {
-			tc_num = values[i].data.uint8_val;
-			continue;
-		} else if (strcmp(nodename, "/frame-preemption-status")) {
-			continue;
+			parse_qbu(value, &tc_num, &pt_num, &oper);
 		}
-
-		printf("\nnode '%s' of '%d' value is : %s\n",
-		       nodename, tc_num, values[i].data.string_val);
-
-		if (strcmp(values[i].data.string_val, "preemptable") == 0)
-			pt_num ^=  (1<<tc_num);
+		if (rc == SR_ERR_NOT_FOUND)
+			rc = SR_ERR_OK;
 	}
-
-	printf("\nstart to config qbu of '%s'\n", ifname_bak);
-	printf("pt value is %d", pt_num);
-	rc = tsn_qbu_set(ifname_bak, pt_num);
+	printf("\nstart to config qbu of '%s'\n", ifname);
+	printf("pt value is %d\n", pt_num);
+	rc = tsn_qbu_set(ifname, pt_num);
 	if (rc < 0) {
-		sprintf("set qbu error, %s!", strerror(-rc));
+		printf("set qbu error, %s!", strerror(-rc));
+		goto cleanup;
 	}
+
 cleanup:
 	close_tsn_socket();
 	sr_free_values(values, count);
 
 	return errno2sp(-rc);
 }
+
+int qbu_config_tsn(sr_session_ctx_t *session, const char *path, bool abort)
+{
+	int rc = SR_ERR_OK;
+	sr_xpath_ctx_t xp_ctx = {0};
+	sr_change_iter_t *it = NULL;
+	sr_val_t *old_value = NULL;
+	sr_val_t *new_value = NULL;
+	sr_val_t *value = NULL;
+	sr_change_oper_t oper;
+	char * ifname = NULL;
+	char ifname_bak[IF_NAME_MAX_LEN] = {0,};
+	char xpath[XPATH_MAX_LEN] = {0,};
+
+	printf("\n ========== %s is called ==========\n", __func__);
+	rc = sr_get_changes_iter(session, path, &it);
+	if (rc != SR_ERR_OK) {
+		printf("Error by sr_get_items: %s", sr_strerror(rc));
+		goto cleanup;
+	}
+
+	while (SR_ERR_OK == (rc = sr_get_change_next(session, it,
+					&oper, &old_value, &new_value))) {
+		value = new_value ? new_value : old_value;
+		ifname = sr_xpath_key_value(value->xpath, "interface",
+					    "name", &xp_ctx);
+		//sr_print_val(value);
+		if (!ifname) {
+			continue;
+		}
+		if (strcmp(ifname, ifname_bak)) {
+			snprintf(ifname_bak, IF_NAME_MAX_LEN, ifname);
+			snprintf(xpath, XPATH_MAX_LEN,
+				 "%s[name='%s']/%s:*//*", IF_XPATH, ifname,
+				 QBU_MODULE_NAME);
+			rc = config_qbu_per_port(session, xpath, abort, ifname);
+			if (rc != SR_ERR_OK)
+				goto cleanup;
+		}
+	}
+	if (rc == SR_ERR_NOT_FOUND)
+		rc = SR_ERR_OK;
+cleanup:
+	return rc;
+}
+
 int qbu_subtree_change_cb(sr_session_ctx_t *session, const char *path,
 		sr_notif_event_t event, void *private_ctx)
 {
 	int rc = SR_ERR_OK;
 	char xpath[XPATH_MAX_LEN] = {0,};
 
-	if (event != SR_EV_VERIFY)
-		return rc;
-	printf("\n ========== %s is called ==========\n", __func__);
-	snprintf(xpath, XPATH_MAX_LEN, "%s/%s:*//*", IF_XPATH, QBU_MODULE_NAME);
-	rc = config_qbu(session, xpath);
+	sr_session_refresh(session);
+	printf("\n ==========ssssssssss START OF %s ==========\n", __func__);
+	print_ev_type(event);
+	snprintf(xpath, XPATH_MAX_LEN, "%s/%s:*//*", IF_XPATH,
+		 QBU_MODULE_NAME);
+	switch (event){
+	case SR_EV_VERIFY:
+	case SR_EV_ENABLED:
+		//print_subtree_changes(session, xpath);
+		rc = qbu_config_tsn(session, xpath, false);
+		break;
+	case SR_EV_APPLY:
+		break;
+	case SR_EV_ABORT:
+		//print_subtree_changes(session, xpath);
+		rc = qbu_config_tsn(session, xpath, true);
+		break;
+	default:
+		break;
+	}
+	printf("\n ==========eeeeeeeeeee END OF %s ==========\n", __func__);
 
 	return rc;
 }
