@@ -29,6 +29,33 @@
 #include "main.h"
 #include "qbu.h"
 
+void clr_qbu(sr_val_t *val, uint32_t *tc, uint32_t *pt,
+		sr_change_oper_t *oper)
+{
+	char * tc_str = NULL;
+	sr_xpath_ctx_t xp_ctx = {0};
+	char *nodename = NULL;
+
+	printf("\n ========== %s is called ==========\n", __func__);
+
+	if (val->type == SR_LIST_T || val->type == SR_CONTAINER_PRESENCE_T)
+		return;
+
+	tc_str = sr_xpath_key_value(val->xpath,
+				    "frame-preemption-status-table",
+				    "traffic-class", &xp_ctx);
+	if (!tc_str)
+		return;
+
+	sr_xpath_recover(&xp_ctx);
+	nodename = sr_xpath_node_name(val->xpath);
+	if (strcmp(nodename, "traffic-class") == 0) {
+		*tc = val->data.uint8_val;
+	} else if (strcmp(nodename, "frame-preemption-status") == 0) {
+		*pt &= ~(1<<*tc);
+	}
+}
+
 void parse_qbu(sr_val_t *val, uint32_t *tc, uint32_t *pt,
 		sr_change_oper_t *oper)
 {
@@ -97,10 +124,17 @@ int config_qbu_per_port(sr_session_ctx_t *session, const char *path, bool abort,
 		while (SR_ERR_OK == (rc = sr_get_change_next(session, it,
 						&oper, &old_value,
 						&new_value))) {
-			if (oper == SR_OP_CREATED && new_value)
-				value = new_value;
-			else
+			if (oper == SR_OP_DELETED) {
+				if (old_value) {
+					clr_qbu(value, &tc_num, &pt_num, &oper);
+					continue;
+				} else { 
+					pt_num = 0;
+				}
 				value = old_value;
+			} else {
+				value = new_value;
+			}
 
 			parse_qbu(value, &tc_num, &pt_num, &oper);
 		}

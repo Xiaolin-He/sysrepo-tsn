@@ -69,185 +69,340 @@ void free_qbv_memory(struct tsn_qbv_conf *qbvconf_ptr)
 	free(qbvconf_ptr);
 }
 
-int config_qbv(char * ifname, struct tsn_qbv_conf *qbvconf_ptr,
+int tsn_config_qbv(char * ifname, struct tsn_qbv_conf *qbvconf_ptr,
 		bool bt_f, struct base_time_s *base,
 		bool ct_f, struct cycle_time_s *cycle,
 		bool enable)
 {
 	int rc = SR_ERR_OK;
+	uint32_t i = 0;
 
 	printf("\n ========== %s is called ==========\n", __func__);
-	if (*ifname == '\0') {
-		printf("\ninterface name is none");
-		rc = SR_ERR_INVAL_ARG;
-		goto out;
-	}
-	printf("\nstart to config qbv of '%s'\n", ifname);
+
+	printf("\n interface name is: %s", ifname);
 	if (bt_f)
 		qbvconf_ptr->admin.base_time = cal_base_time(base);
 	if (ct_f)
 		qbvconf_ptr->admin.cycle_time = cal_cycle_time(cycle);
+
+	if (enable)
+		printf("\n gate_enable is true");
+	else
+		printf("\n gate_enable is false");
+	printf("\n control list length is: %u",
+		qbvconf_ptr->admin.control_list_length);
+
+	for (i = 0; i < qbvconf_ptr->admin.control_list_length;
+			i++) {
+		printf("\n gate state of index %u is :%d", i,
+			(qbvconf_ptr->admin.control_list + i)->gate_state);
+		printf("\n gate time interval of index %u is :%d", i,
+			(qbvconf_ptr->admin.control_list + i)->time_interval);
+	}
+
+	printf("\n admin gatestate is %llu", qbvconf_ptr->admin.gate_states);
+	printf("\n base time is %llu", qbvconf_ptr->admin.base_time);
+	printf("\n cycle time is %u", qbvconf_ptr->admin.cycle_time);
+	printf("\n cycle time ext is %u", qbvconf_ptr->admin.cycle_time_extension);
+	printf("\n max sdu is %u\n", qbvconf_ptr->maxsdu);
+
 	rc = tsn_qos_port_qbv_set(ifname, qbvconf_ptr, enable);
-	printf("gate st of index 0 is :%d\n", (qbvconf_ptr->admin.control_list)->gate_state);
-	printf("gate tv of index 0 is :%d\n", (qbvconf_ptr->admin.control_list)->time_interval);
-	printf("gate st of index 1 is :%d\n", (qbvconf_ptr->admin.control_list + 1)->gate_state);
-	printf("gate tv of index 1 is :%d\n", (qbvconf_ptr->admin.control_list + 1)->time_interval);
-	printf("base time is %ld\n", qbvconf_ptr->admin.base_time);
-	printf("cycle time is %ld\n", qbvconf_ptr->admin.cycle_time);
 	if (rc < 0) {
-		printf("set qbv error, %s!", strerror(-rc));
-		rc = SR_ERR_INTERNAL;
+		printf("\n set qbv error, %s!", strerror(-rc));
+		rc = errno2sp(-rc);
 		goto out;
 	}
 out:
 	return rc;
 }
 
-int parse_qbv(sr_session_ctx_t *session, const char *path)
+void clr_qbv(sr_val_t *value, struct tsn_qbv_conf *qbvconf_ptr,
+		bool *bt_f, struct base_time_s *base,
+		bool *ct_f, struct cycle_time_s *cycle,
+		bool *qbv_en)
+{
+	sr_xpath_ctx_t xp_ctx = {0};
+	char * index = NULL;
+	char * nodename = NULL;
+	struct tsn_qbv_entry *entry = NULL;
+	uint64_t u64_val = 0;
+
+	printf("\n ========== %s is called ==========", __func__);
+
+	sr_xpath_recover(&xp_ctx);
+	nodename = sr_xpath_node_name(value->xpath);
+	if (!nodename)
+		return;
+
+	printf("\n node name is :%s", nodename);
+
+	if (!strcmp(nodename, "gate-enabled")) {
+		*qbv_en = false;
+	} else if (!strcmp(nodename, "admin-gate-states")) {
+		qbvconf_ptr->admin.gate_states = 0;
+	} else if (!strcmp(nodename, "admin-control-list-length")) {
+		qbvconf_ptr->admin.control_list_length = 0;
+	} else if (!strcmp(nodename, "gate-states-value")) {
+		sr_xpath_recover(&xp_ctx);
+		index = sr_xpath_key_value(value->xpath,
+					   "admin-control-list",
+					   "index", &xp_ctx);
+		u64_val = strtoul(index, NULL, 0);
+		entry = qbvconf_ptr->admin.control_list;
+		(entry + u64_val)->gate_state = 0;
+	} else if (!strcmp(nodename, "time-interval-value")) {
+		sr_xpath_recover(&xp_ctx);
+		index = sr_xpath_key_value(value->xpath,
+					   "admin-control-list",
+					   "index", &xp_ctx);
+		u64_val = strtoul(index, NULL, 0);
+		entry = qbvconf_ptr->admin.control_list;
+		printf("\n clear the %lu th tv", u64_val); 
+		(entry + u64_val)->time_interval = 0;
+	} else if (!strcmp(nodename, "numerator")) {
+		cycle->numerator = 0;
+	} else if (!strcmp(nodename, "denominator")) {
+		cycle->denominator = 1;
+		*ct_f = true;
+	} else if (!strcmp(nodename,
+			   "admin-cycle-time-extension")) {
+		qbvconf_ptr->admin.cycle_time_extension = 0;
+	} else if (!strcmp(nodename, "seconds")) {
+		base->seconds = 0;
+	} else if (!strcmp(nodename, "fractional-seconds")) {
+		base->nanoseconds = 0;
+		*bt_f = true;
+	} else if (!strcmp(nodename, "config-change")) {
+		qbvconf_ptr->config_change = 0;
+	} else if (!strcmp(nodename, "queue-max-sdu")) {
+		sr_xpath_recover(&xp_ctx);
+		if (strcmp("0",
+			   sr_xpath_key_value(value->xpath,
+					      "max-sdu-table",
+					      "traffic-class",
+					      &xp_ctx)))
+			qbvconf_ptr->maxsdu = 0;
+	}
+
+	return;
+}
+
+int parse_qbv(sr_val_t *value, struct tsn_qbv_conf *qbvconf_ptr,
+		bool *bt_f, struct base_time_s *base,
+		bool *ct_f, struct cycle_time_s *cycle,
+		bool *qbv_en)
 {
 	int rc = SR_ERR_OK;
-	sr_val_t *values = NULL;
-	size_t count = 0;
 	sr_xpath_ctx_t xp_ctx = {0};
-	char * ifname = NULL;
 	char * index = NULL;
 	uint8_t u8_val = 0;
 	uint32_t u32_val = 0;
 	uint64_t u64_val = 0;
 	char * nodename = NULL;
-	struct tsn_qbv_conf *qbvconf_ptr;
-	struct tsn_qbv_entry *entry;
+	struct tsn_qbv_entry *entry = NULL;
+
+	//printf("\n ========== %s is called ==========", __func__);
+
+	sr_xpath_recover(&xp_ctx);
+	nodename = sr_xpath_node_name(value->xpath);
+	if (!nodename)
+		goto out;
+
+	//printf("\n node name is :%s", nodename);
+
+	if (!strcmp(nodename, "gate-enabled")) {
+		*qbv_en = value->data.bool_val;
+	} else if (!strcmp(nodename, "admin-gate-states")) {
+		u8_val = value->data.uint8_val;
+		qbvconf_ptr->admin.gate_states = u8_val;
+	} else if (!strcmp(nodename, "admin-control-list-length")) {
+		u32_val = value->data.uint32_val;
+		qbvconf_ptr->admin.control_list_length = u32_val;
+	} else if (!strcmp(nodename, "gate-states-value")) {
+		sr_xpath_recover(&xp_ctx);
+		index = sr_xpath_key_value(value->xpath,
+					   "admin-control-list",
+					   "index", &xp_ctx);
+		u64_val = strtoul(index, NULL, 0);
+		entry = qbvconf_ptr->admin.control_list;
+		u8_val = value->data.uint8_val;
+		(entry + u64_val)->gate_state = u8_val;
+	} else if (!strcmp(nodename, "time-interval-value")) {
+		sr_xpath_recover(&xp_ctx);
+		index = sr_xpath_key_value(value->xpath,
+					   "admin-control-list",
+					   "index", &xp_ctx);
+		u64_val = strtoul(index, NULL, 0);
+		entry = qbvconf_ptr->admin.control_list;
+		u32_val = value->data.uint32_val;
+		(entry + u64_val)->time_interval = u32_val;
+	} else if (!strcmp(nodename, "numerator")) {
+		cycle->numerator = value->data.uint32_val;
+	} else if (!strcmp(nodename, "denominator")) {
+		cycle->denominator = value->data.uint32_val;
+		if (!cycle->denominator) {
+			printf("\n denominator is zero!");
+			rc = SR_ERR_INVAL_ARG;
+			goto out;
+		}
+		*ct_f = true;
+	} else if (!strcmp(nodename,
+			  "admin-cycle-time-extension")) {
+		u32_val = value->data.uint32_val;
+		qbvconf_ptr->admin.cycle_time_extension = u32_val;
+	} else if (!strcmp(nodename, "seconds")) {
+		base->seconds = value->data.uint64_val;
+	} else if (!strcmp(nodename, "fractional-seconds")) {
+		base->nanoseconds = value->data.uint64_val;
+		if (!base->nanoseconds) {
+			printf("\n nanoseconds is zero!");
+			rc = SR_ERR_INVAL_ARG;
+			goto out;
+		}
+		*bt_f = true;
+	} else if (!strcmp(nodename, "config-change")) {
+		qbvconf_ptr->config_change = value->data.bool_val;
+	} else if (!strcmp(nodename, "queue-max-sdu")) {
+		sr_xpath_recover(&xp_ctx);
+		if (strcmp("0",
+			   sr_xpath_key_value(value->xpath,
+					      "max-sdu-table",
+					      "traffic-class",
+					      &xp_ctx)))
+			qbvconf_ptr->maxsdu = value->data.uint32_val;
+	}
+
+out:
+	return rc;
+}
+
+int config_qbv_per_port(sr_session_ctx_t *session, const char *path, bool abort,
+		char *ifname)
+{
+	int rc = SR_ERR_OK;
+	sr_change_iter_t *it = NULL;
+	sr_change_oper_t oper;
+	sr_val_t *old_value = NULL;
+	sr_val_t *new_value = NULL;
+	sr_val_t *values = NULL;
+	sr_val_t *value = NULL;
+	size_t count = 0, i = 0;
 	bool qbv_en = false;
-	char temp[NODE_NAME_MAX_LEN] = {0,};
-	char ifname_bak[IF_NAME_MAX_LEN] = {0,};
+	struct tsn_qbv_conf *qbvconf_ptr;
 	struct cycle_time_s ct = {0};
 	struct base_time_s bt = {0};
 	bool ct_f = false, bt_f = false;
 
 	printf("\n ========== %s is called ==========\n", __func__);
-
-	if (!path || !session)
-		return EINVAL;
-
 	qbvconf_ptr = malloc_qbv_memory();
 	if (!qbvconf_ptr)
-		return ENOMEM;
+		return errno2sp(ENOMEM);
 
 	init_qbv_memory(qbvconf_ptr);
 	rc = sr_get_items(session, path, &values, &count);
 	if (rc != SR_ERR_OK) {
 		printf("Error by sr_get_items: %s", sr_strerror(rc));
+		if (rc == SR_ERR_NOT_FOUND)
+			rc = SR_ERR_OK;
 		return rc;
 	}
-	printf("\n get %ld items\n", count);
-	init_tsn_socket();
-	for (size_t i = 0; i < count; i++) {
-		ifname = sr_xpath_key_value(values[i].xpath, "interface",
-					    "name", &xp_ctx);
-		if (*ifname_bak == '\0')
-			snprintf(ifname_bak, IF_NAME_MAX_LEN, ifname);
-		if (strcmp(ifname, ifname_bak)) {
-			if (config_qbv(ifname_bak, qbvconf_ptr, bt_f, &bt,
-				       ct_f, &ct, qbv_en) != SR_ERR_OK)
-				goto cleanup;
-			init_qbv_memory(qbvconf_ptr);
-			snprintf(ifname_bak, IF_NAME_MAX_LEN, ifname);
-		}
 
-		sr_xpath_recover(&xp_ctx);
-		nodename = strrchr(values[i].xpath, '/');
-		printf("node name is :%s\n", nodename);
-		snprintf(temp, NODE_NAME_MAX_LEN, nodename);
-		if (!strcmp(nodename, "/gate-enabled")) {
-			qbv_en = values[i].data.bool_val;
-			if (qbv_en)
-				printf("gate_enable is true\n");
-			else
-				printf("gate_enable is false\n");
-			continue;
-		} else if (!strcmp(nodename, "/admin-gate-states")) {
-			u8_val = values[i].data.uint8_val;
-			qbvconf_ptr->admin.gate_states = u8_val;
-			printf("admin gate state is %x\n", u8_val);
-			continue;
-		} else if (!strcmp(nodename, "/admin-control-list-length")) {
-			u32_val = values[i].data.uint32_val;
-			qbvconf_ptr->admin.control_list_length = u32_val;
-			printf("gate list lenth is %d\n", u32_val);
-			continue;
-		} else if (!strcmp(nodename, "/gate-states-value")) {
-			sr_xpath_recover(&xp_ctx);
-			index = sr_xpath_key_value(values[i].xpath,
-						   "admin-control-list",
-						   "index", &xp_ctx);
-			u64_val = strtoul(index, NULL, 0);
-			entry = qbvconf_ptr->admin.control_list;
-			u8_val = values[i].data.uint8_val;
-			(entry + u64_val)->gate_state = u8_val;
-			printf("time state of index '%ld' is:%x\n",
-				u64_val, u8_val);
-			continue;
-		} else if (!strcmp(nodename, "/time-interval-value")) {
-			sr_xpath_recover(&xp_ctx);
-			index = sr_xpath_key_value(values[i].xpath,
-						   "admin-control-list",
-						   "index", &xp_ctx);
-			u64_val = strtoul(index, NULL, 0);
-			entry = qbvconf_ptr->admin.control_list;
-			u32_val = values[i].data.uint32_val;
-			(entry + u64_val)->time_interval = u32_val;
-			printf("time interval of index '%ld' is:%d\n",
-				u64_val, u32_val);
-			continue;
-		} else if (!strcmp(nodename, "/numerator")) {
-			ct.numerator = values[i].data.uint32_val;
-			continue;
-		} else if (!strcmp(nodename, "/denominator")) {
-			ct.denominator = values[i].data.uint32_val;
-			if (!ct.denominator) {
-				printf("\ndenominator is zero!\n");
-				goto cleanup;
-			}
-			ct_f = true;
-			continue;
-		} else if (!strcmp(nodename,
-				  "/sched:admin-cycle-time-extension")) {
-			u32_val = values[i].data.uint32_val;
-			qbvconf_ptr->admin.cycle_time_extension = u32_val;
-			continue;
-		} else if (!strcmp(nodename, "/seconds")) {
-			bt.seconds = values[i].data.uint64_val;
-			continue;
-		} else if (!strcmp(nodename, "/fractional-seconds")) {
-			bt.nanoseconds = values[i].data.uint64_val;
-			if (!bt.nanoseconds) {
-				printf("\nnanoseconds is zero!\n");
-				goto cleanup;
-			}
-			bt_f = true;
-			continue;
-		} else if (!strcmp(nodename, "/config-change")) {
-			qbvconf_ptr->config_change = values[i].data.bool_val;
-			continue;
-		} else if (!strcmp(nodename, "/queue-max-sdu")) {
-			sr_xpath_recover(&xp_ctx);
-			if (strcmp("0",
-				   sr_xpath_key_value(values[i].xpath,
-						      "max-sdu-table",
-						      "traffic-class",
-						      &xp_ctx)))
-				qbvconf_ptr->maxsdu = values[i].data.uint32_val;
-			continue;
+	//printf("\n get %d items", count);
+	init_tsn_socket();
+	for (i = 0; i < count; i++)
+		parse_qbv(&values[i], qbvconf_ptr, &bt_f, &bt,
+			  &ct_f, &ct, &qbv_en);
+
+	/* if it is called by abort event, we should use new value */
+	if (abort) {
+		//printf("\n abort operation");
+		rc = sr_get_changes_iter(session, path, &it);
+		if (rc != SR_ERR_OK) {
+			printf("\n Get changes iter failed for xpath %s", path);
+			goto cleanup;
 		}
+		while (SR_ERR_OK == (rc = sr_get_change_next(session, it,
+						&oper, &old_value,
+						&new_value))) {
+			print_change(oper, old_value, new_value);
+
+			if (oper == SR_OP_DELETED) {
+				if (old_value) {
+					clr_qbv(old_value, qbvconf_ptr, &bt_f,
+						 &bt, &ct_f, &ct, &qbv_en);
+					continue;
+				} else { 
+					init_qbv_memory(qbvconf_ptr);
+				}
+			} else {
+				value = new_value;
+			}
+
+			parse_qbv(value, qbvconf_ptr, &bt_f, &bt,
+				  &ct_f, &ct, &qbv_en);
+		}
+		if (rc == SR_ERR_NOT_FOUND)
+			rc = SR_ERR_OK;
+	}
+	rc = tsn_config_qbv(ifname, qbvconf_ptr, &bt_f, &bt,
+			    &ct_f, &ct, &qbv_en);
+	if (rc < 0) {
+		printf("set qbv error, %s!", strerror(-rc));
+		rc = errno2sp(-rc);
+		goto cleanup;
 	}
 
-	rc = config_qbv(ifname_bak, qbvconf_ptr, bt_f, &bt, ct_f, &ct, qbv_en);
 cleanup:
 	close_tsn_socket();
 	free_qbv_memory(qbvconf_ptr);
 	sr_free_values(values, count);
 
-	return errno2sp(-rc);
+	return rc;
+}
+
+int qbv_config(sr_session_ctx_t *session, const char *path, bool abort)
+{
+	int rc = SR_ERR_OK;
+	sr_xpath_ctx_t xp_ctx = {0};
+	sr_change_iter_t *it = NULL;
+	sr_val_t *old_value = NULL;
+	sr_val_t *new_value = NULL;
+	sr_val_t *value = NULL;
+	sr_change_oper_t oper;
+	char * ifname = NULL;
+	char ifname_bak[IF_NAME_MAX_LEN] = {0,};
+	char xpath[XPATH_MAX_LEN] = {0,};
+
+	printf("\n ========== %s is called ==========", __func__);
+	rc = sr_get_changes_iter(session, path, &it);
+	if (rc != SR_ERR_OK) {
+		printf("\nError by sr_get_items: %s", sr_strerror(rc));
+		goto cleanup;
+	}
+
+	while (SR_ERR_OK == (rc = sr_get_change_next(session, it,
+					&oper, &old_value, &new_value))) {
+		value = new_value ? new_value : old_value;
+		ifname = sr_xpath_key_value(value->xpath, "interface",
+					    "name", &xp_ctx);
+		//sr_print_val(value);
+		if (!ifname)
+			continue;
+
+		if (strcmp(ifname, ifname_bak)) {
+			snprintf(ifname_bak, IF_NAME_MAX_LEN, ifname);
+			snprintf(xpath, XPATH_MAX_LEN,
+				 "%s[name='%s']/%s:*//*", IF_XPATH, ifname,
+				 QBV_MODULE_NAME);
+			rc = config_qbv_per_port(session, xpath, abort, ifname);
+			if (rc != SR_ERR_OK)
+				break;
+		}
+	}
+	if (rc == SR_ERR_NOT_FOUND)
+		rc = SR_ERR_OK;
+cleanup:
+	return rc;
 }
 
 int qbv_subtree_change_cb(sr_session_ctx_t *session, const char *path,
@@ -255,14 +410,44 @@ int qbv_subtree_change_cb(sr_session_ctx_t *session, const char *path,
 {
 	int rc = SR_ERR_OK;
 	char xpath[XPATH_MAX_LEN] = {0,};
+	static bool apply_to_dev = false;
 
-	if (event != SR_EV_VERIFY)
+	if (sr_xpath_node_name_eq(path, "ieee802-dot1q-sched:max-sdu-table"))
 		return rc;
-	printf("\n ========== %s is called ==========\n", __func__);
-	printf("xpath is: %s\n", path);
-	snprintf(xpath, XPATH_MAX_LEN, "%s/%s:*//*", IF_XPATH, QBV_MODULE_NAME);
-	rc = parse_qbv(session, xpath);
 
+	printf("\n ==========ssssssssss START OF %s ==========", __func__);
+	print_ev_type(event);
+
+	snprintf(xpath, XPATH_MAX_LEN, "%s/%s:*//*", IF_XPATH,
+		 QBV_MODULE_NAME);
+	switch (event){
+	case SR_EV_VERIFY:
+		//rc = parse_qbv(session, xpath);
+		if (rc)
+			goto out;
+		rc = qbv_config(session, xpath, false);
+		apply_to_dev = true;
+		break;
+	case SR_EV_ENABLED:
+		//print_subtree_changes(session, xpath);
+		rc = qbv_config(session, xpath, false);
+		break;
+	case SR_EV_APPLY:
+		//print_subtree_changes(session, xpath);
+		break;
+	case SR_EV_ABORT:
+		//print_subtree_changes(session, xpath);
+		if (!apply_to_dev)
+			goto out;
+		rc = qbv_config(session, xpath, true);
+		apply_to_dev = false;
+		break;
+	default:
+		break;
+	}
+out:
+	printf("\n ==========eeeeeeeeeee END OF %s =========================\n",
+		__func__);
 	return rc;
 }
 
