@@ -89,19 +89,19 @@ void print_change(sr_change_oper_t oper, sr_val_t *val_old,
 	switch (oper) {
 	case SR_OP_CREATED:
 		if (val_new) {
-			printf("created new value: ");
+			printf("\n created new value: ");
 			sr_print_val(val_new);
 		}
 		break;
 	case SR_OP_DELETED:
 		if (val_old) {
-			printf("deleted old value: ");
+			printf("\n deleted old value: ");
 			sr_print_val(val_old);
 		}
 		break;
 	case SR_OP_MODIFIED:
 		if (val_old && val_new) {
-			printf("modified:\nold value ");
+			printf("\n modified:\nold value ");
 			sr_print_val(val_old);
 			printf("new value ");
 			sr_print_val(val_new);
@@ -109,7 +109,7 @@ void print_change(sr_change_oper_t oper, sr_val_t *val_old,
 		break;
 	case SR_OP_MOVED:
 		if (val_new) {
-			printf("moved: %s after %s", val_new->xpath,
+			printf("\n moved: %s after %s", val_new->xpath,
 			       val_old ? val_old->xpath : NULL);
 		}
 		break;

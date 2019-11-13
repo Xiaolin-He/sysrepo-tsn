@@ -100,7 +100,7 @@ int tsn_config_qbv(char * ifname, struct tsn_qbv_conf *qbvconf_ptr,
 			(qbvconf_ptr->admin.control_list + i)->time_interval);
 	}
 
-	printf("\n admin gatestate is %llu", qbvconf_ptr->admin.gate_states);
+	printf("\n admin gatestate is %d", qbvconf_ptr->admin.gate_states);
 	printf("\n base time is %llu", qbvconf_ptr->admin.base_time);
 	printf("\n cycle time is %u", qbvconf_ptr->admin.cycle_time);
 	printf("\n cycle time ext is %u", qbvconf_ptr->admin.cycle_time_extension);
